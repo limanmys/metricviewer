@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MetricViewer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
+.header{background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;align-items:center;gap:16px}
+.header h1{font-size:18px;color:#58a6ff;font-weight:600}
+.header .status{font-size:12px;color:#8b949e;margin-left:auto}
+.controls{background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.control-group{display:flex;flex-direction:column;gap:4px}
+.control-group label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px}
+select,input[type=text],button{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px;font-size:13px;outline:none}
+select:focus,input:focus{border-color:#58a6ff}
+select{min-width:200px;max-width:400px}
+button{background:#238636;border-color:#238636;color:#fff;cursor:pointer;padding:6px 16px;font-weight:500}
+button:hover{background:#2ea043}
+button.secondary{background:#21262d;border-color:#30363d;color:#c9d1d9}
+button.secondary:hover{background:#30363d}
+button.cpu-btn{background:#1f6feb;border-color:#1f6feb}
+button.cpu-btn:hover{background:#388bfd}
+button.mem-btn{background:#8957e5;border-color:#8957e5}
+button.mem-btn:hover{background:#a371f7}
+button.disk-btn{background:#b45309;border-color:#b45309}
+button.disk-btn:hover{background:#d97706}
+.main{padding:16px 24px}
+.charts-grid{display:flex;flex-direction:column;gap:16px}
+.chart-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;position:relative}
+.chart-card .chart-title{font-size:14px;color:#58a6ff;margin-bottom:4px;font-weight:500}
+.chart-card .chart-labels{font-size:11px;color:#8b949e;margin-bottom:12px}
+.chart-card .remove-btn{position:absolute;top:12px;right:12px;background:none;border:none;color:#8b949e;cursor:pointer;font-size:18px;padding:4px 8px;border-radius:4px}
+.chart-card .remove-btn:hover{background:#da363322;color:#f85149}
+.chart-container{position:relative;height:250px}
+.empty-state{text-align:center;padding:80px 20px;color:#8b949e}
+.empty-state h2{font-size:20px;margin-bottom:8px;color:#c9d1d9}
+.empty-state p{font-size:14px}
+.metric-search{position:relative}
+.metric-search input{min-width:240px}
+.search-results{position:absolute;top:100%;left:0;right:0;background:#161b22;border:1px solid #30363d;border-radius:0 0 6px 6px;max-height:300px;overflow-y:auto;z-index:100;display:none}
+.search-results.active{display:block}
+.search-results .item{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #21262d}
+.search-results .item:hover{background:#21262d}
+.auto-refresh{display:flex;align-items:center;gap:6px;font-size:12px;color:#8b949e}
+.summary-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.summary-badge{font-size:11px;padding:2px 8px;border-radius:12px;background:#21262d;color:#8b949e}
+.summary-badge .val{color:#c9d1d9;font-weight:500}
+.dash-section{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:16px}
+.dash-section .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.dash-section .section-title{font-size:16px;color:#58a6ff;font-weight:600}
+.dash-section .section-subtitle{font-size:12px;color:#8b949e}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:12px}
+.dash-card{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:12px}
+.dash-card .card-name{font-size:12px;color:#c9d1d9;font-weight:500;margin-bottom:4px}
+.dash-card .card-value{font-size:24px;font-weight:600;margin-bottom:8px}
+.dash-card .mini-chart{position:relative;height:120px}
+.dash-info{font-size:12px;color:#8b949e;padding:8px 12px;background:#21262d;border-radius:6px;margin-bottom:12px}
+.time-bar{background:#161b22;border-top:1px solid #30363d;padding:10px 24px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;z-index:50}
+.time-bar label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px}
+.time-bar .range-btns{display:flex;gap:4px}
+.time-bar .range-btns button{padding:4px 12px;font-size:12px;background:#21262d;border-color:#30363d;color:#8b949e}
+.time-bar .range-btns button:hover{background:#30363d;color:#c9d1d9}
+.time-bar .range-btns button.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.time-bar .time-info{font-size:11px;color:#8b949e;margin-left:auto}
+.mem-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.mem-legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:#8b949e}
+.mem-legend-item .dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+</style>
+</head>
+<body>
+<div class="header">
+ <h1>MetricViewer</h1>
+ <span class="status" id="statusText">Yukleniyor...</span>
+</div>
+<div class="controls">
+ <div class="control-group">
+  <label>Metrik Ara</label>
+  <div class="metric-search">
+   <input type="text" id="metricSearch" placeholder="Metrik adi yazin..." autocomplete="off">
+   <div class="search-results" id="searchResults"></div>
+  </div>
+ </div>
+ <div class="control-group">
+  <label>Etiketler</label>
+  <select id="labelSelect" disabled><option value="">Once metrik secin</option></select>
+ </div>
+ <div class="control-group">
+  <button id="addBtn" disabled>Grafik Ekle</button>
+ </div>
+ <div class="control-group">
+  <button class="secondary" id="addAllBtn" disabled>Tum Etiketleri Ekle</button>
+ </div>
+ <div class="control-group">
+  <button class="cpu-btn" id="cpuDashBtn">CPU %</button>
+ </div>
+ <div class="control-group">
+  <button class="mem-btn" id="memDashBtn">Memory %</button>
+ </div>
+ <div class="control-group">
+  <button class="disk-btn" id="diskDashBtn">Disk I/O</button>
+ </div>
+ <div class="control-group" style="margin-left:auto">
+  <div class="auto-refresh">
+   <input type="checkbox" id="autoRefresh">
+   <span>Otomatik yenile (30s)</span>
+  </div>
+ </div>
+</div>
+<div class="main">
+ <div class="charts-grid" id="chartsGrid">
+  <div class="empty-state" id="emptyState">
+   <h2>Henuz grafik eklenmedi</h2>
+   <p>Yukaridaki butonlardan CPU/Memory/Disk dashboardunu acin veya arama kutusundan metrik secin.</p>
+  </div>
+ </div>
+</div>
+<div class="time-bar">
+ <label>Zaman Araligi:</label>
+ <div class="range-btns" id="rangeBtns">
+  <button data-range="300">5dk</button>
+  <button data-range="900">15dk</button>
+  <button data-range="1800">30dk</button>
+  <button data-range="3600" class="active">1 Saat</button>
+  <button data-range="10800">3 Saat</button>
+  <button data-range="21600">6 Saat</button>
+  <button data-range="43200">12 Saat</button>
+  <button data-range="86400">1 Gun</button>
+  <button data-range="604800">1 Hafta</button>
+  <button data-range="0">Tumu</button>
+ </div>
+ <span class="time-info" id="timeInfo"></span>
+</div>
+<script>
+const COLORS=['#58a6ff','#f78166','#3fb950','#d2a8ff','#79c0ff','#ffa657','#56d364','#bc8cff','#ff7b72','#7ee787','#e3b341','#a5d6ff','#f2cc60','#db61a2'];
+let colorIdx=0;
+function nextColor(){return COLORS[colorIdx++%COLORS.length]}
+
+let allMetrics=[];
+let charts=[];
+let autoRefreshTimer=null;
+let selectedRange=3600; // default 1 hour
+
+function getTimeWindow(){
+ if(selectedRange===0) return {start:0,end:0};
+ const now=Date.now()/1000;
+ return {start:now-selectedRange, end:0};
+}
+
+async function fetchJSON(url){
+ const resp=await fetch(url);
+ if(!resp.ok) throw new Error('HTTP '+resp.status);
+ return resp.json();
+}
+
+async function init(){
+ try{
+  allMetrics=await fetchJSON('/api/metrics');
+  const tr=await fetchJSON('/api/timerange');
+  const minD=tr.min>0?new Date(tr.min*1000).toLocaleString('tr-TR'):'-';
+  const maxD=tr.max>0?new Date(tr.max*1000).toLocaleString('tr-TR'):'-';
+  document.getElementById('statusText').textContent=allMetrics.length+' metrik | '+minD+' - '+maxD;
+  updateTimeInfo();
+ }catch(e){
+  document.getElementById('statusText').textContent='Baglanti hatasi: '+e.message;
+ }
+}
+
+function updateTimeInfo(){
+ const el=document.getElementById('timeInfo');
+ if(selectedRange===0){el.textContent='Tum veriler gosteriliyor';return}
+ const tw=getTimeWindow();
+ const from=new Date(tw.start*1000).toLocaleString('tr-TR');
+ const to=new Date(Date.now()).toLocaleString('tr-TR');
+ el.textContent=from+' - '+to;
+}
+
+// Time range buttons
+document.getElementById('rangeBtns').addEventListener('click',function(e){
+ const btn=e.target.closest('button[data-range]');
+ if(!btn) return;
+ document.querySelectorAll('#rangeBtns button').forEach(function(b){b.classList.remove('active')});
+ btn.classList.add('active');
+ selectedRange=parseInt(btn.dataset.range,10);
+ updateTimeInfo();
+ refreshAll();
+});
+
+const searchInput=document.getElementById('metricSearch');
+const searchResults=document.getElementById('searchResults');
+const labelSelect=document.getElementById('labelSelect');
+const addBtn=document.getElementById('addBtn');
+const addAllBtn=document.getElementById('addAllBtn');
+let selectedMetric='';
+
+searchInput.addEventListener('input',function(){
+ const q=searchInput.value.toLowerCase().trim();
+ if(!q){searchResults.classList.remove('active');return}
+ const matches=allMetrics.filter(function(m){return m.toLowerCase().indexOf(q)>=0}).slice(0,20);
+ if(!matches.length){searchResults.classList.remove('active');return}
+ searchResults.innerHTML=matches.map(function(m){return '<div class="item" data-name="'+escapeHtml(m)+'">'+highlightMatch(m,q)+'</div>'}).join('');
+ searchResults.classList.add('active');
+});
+
+searchInput.addEventListener('focus',function(){
+ if(searchInput.value.trim()) searchInput.dispatchEvent(new Event('input'));
+});
+
+document.addEventListener('click',function(e){
+ if(!e.target.closest('.metric-search')) searchResults.classList.remove('active');
+});
+
+searchResults.addEventListener('click',async function(e){
+ const item=e.target.closest('.item');
+ if(!item) return;
+ selectedMetric=item.dataset.name;
+ searchInput.value=selectedMetric;
+ searchResults.classList.remove('active');
+ await loadLabels(selectedMetric);
+});
+
+function highlightMatch(text,query){
+ const idx=text.toLowerCase().indexOf(query);
+ if(idx<0) return escapeHtml(text);
+ return escapeHtml(text.slice(0,idx))+'<strong style="color:#58a6ff">'+escapeHtml(text.slice(idx,idx+query.length))+'</strong>'+escapeHtml(text.slice(idx+query.length));
+}
+
+async function loadLabels(name){
+ try{
+  const labels=await fetchJSON('/api/labels?name='+encodeURIComponent(name));
+  labelSelect.innerHTML='';
+  labelSelect.disabled=false;
+  addBtn.disabled=false;
+  addAllBtn.disabled=labels.length<=1;
+  if(!labels.length||(labels.length===1&&labels[0]==='')){
+   labelSelect.innerHTML='<option value="">(etiket yok)</option>';
+  }else{
+   labels.forEach(function(l){
+    const opt=document.createElement('option');
+    opt.value=l;
+    opt.textContent=l||'(etiket yok)';
+    labelSelect.appendChild(opt);
+   });
+  }
+ }catch(e){console.error('Labels error:',e)}
+}
+
+addBtn.addEventListener('click',function(){
+ if(!selectedMetric) return;
+ addChart(selectedMetric,labelSelect.value);
+});
+
+addAllBtn.addEventListener('click',async function(){
+ if(!selectedMetric) return;
+ const labels=await fetchJSON('/api/labels?name='+encodeURIComponent(selectedMetric));
+ for(const l of labels) addChart(selectedMetric,l);
+});
+
+async function addChart(name,labels){
+ document.getElementById('emptyState').style.display='none';
+ const chartId='chart-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
+ const card=document.createElement('div');
+ card.className='chart-card';
+ card.id=chartId;
+ card.innerHTML='<div class="chart-title">'+escapeHtml(name)+'</div>'
+  +'<div class="chart-labels">'+(labels?escapeHtml(labels):'(etiket yok)')+'</div>'
+  +'<button class="remove-btn" title="Kaldir">X</button>'
+  +'<div class="summary-row" id="'+chartId+'-summary"></div>'
+  +'<div class="chart-container"><canvas id="'+chartId+'-canvas"></canvas></div>';
+ document.getElementById('chartsGrid').appendChild(card);
+
+ card.querySelector('.remove-btn').addEventListener('click',function(){
+  const info=charts.find(function(c){return c.id===chartId});
+  if(info) info.chart.destroy();
+  charts=charts.filter(function(c){return c.id!==chartId});
+  card.remove();
+  if(!charts.length&&!cpuSection&&!memSection) document.getElementById('emptyState').style.display='';
+ });
+
+ const color=nextColor();
+ const ctx=document.getElementById(chartId+'-canvas').getContext('2d');
+ const chart=new Chart(ctx,{
+  type:'line',
+  data:{datasets:[{label:labels||name,data:[],borderColor:color,backgroundColor:color+'22',borderWidth:1.5,pointRadius:3,pointHoverRadius:5,fill:true,tension:0.2}]},
+  options:{
+   responsive:true,maintainAspectRatio:false,
+   interaction:{intersect:false,mode:'index'},
+   scales:{
+    x:{type:'time',time:{tooltipFormat:'dd MMM yyyy HH:mm:ss'},grid:{color:'#21262d'},ticks:{color:'#8b949e',maxTicksLimit:12}},
+    y:{grid:{color:'#21262d'},ticks:{color:'#8b949e'}}
+   },
+   plugins:{legend:{display:false},tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#c9d1d9',bodyColor:'#c9d1d9'}}
+  }
+ });
+
+ const info={id:chartId,name:name,labels:labels,chart:chart};
+ charts.push(info);
+ await refreshChart(info);
+}
+
+async function refreshChart(info){
+ try{
+  const tw=getTimeWindow();
+  let url='/api/query?name='+encodeURIComponent(info.name)+'&labels='+encodeURIComponent(info.labels);
+  if(tw.start>0) url+='&start='+tw.start;
+  if(tw.end>0) url+='&end='+tw.end;
+  const points=await fetchJSON(url);
+  const data=points.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.value}});
+  info.chart.data.datasets[0].data=data;
+  info.chart.update('none');
+
+  const el=document.getElementById(info.id+'-summary');
+  if(points.length>0){
+   const vals=points.map(function(p){return p.value});
+   const last=vals[vals.length-1];
+   const mn=Math.min.apply(null,vals);
+   const mx=Math.max.apply(null,vals);
+   const avg=vals.reduce(function(a,b){return a+b},0)/vals.length;
+   el.innerHTML='<span class="summary-badge">Son: <span class="val">'+formatValue(last)+'</span></span>'
+    +'<span class="summary-badge">Min: <span class="val">'+formatValue(mn)+'</span></span>'
+    +'<span class="summary-badge">Max: <span class="val">'+formatValue(mx)+'</span></span>'
+    +'<span class="summary-badge">Ort: <span class="val">'+formatValue(avg)+'</span></span>'
+    +'<span class="summary-badge">Nokta: <span class="val">'+points.length+'</span></span>';
+  }else{
+   el.innerHTML='<span class="summary-badge">Secilen zaman araliginda veri yok</span>';
+  }
+ }catch(e){console.error('Refresh error:',e)}
+}
+
+async function refreshAll(){
+ updateTimeInfo();
+ for(const info of charts) await refreshChart(info);
+ if(cpuSection) await showCPUDashboard();
+ if(memSection) await showMemDashboard();
+ if(diskSection) await showDiskDashboard();
+}
+
+document.getElementById('autoRefresh').addEventListener('change',function(e){
+ if(e.target.checked){autoRefreshTimer=setInterval(refreshAll,30000)}
+ else{clearInterval(autoRefreshTimer);autoRefreshTimer=null}
+});
+
+function formatValue(v){
+ if(Math.abs(v)>=1e12) return(v/1e12).toFixed(2)+' T';
+ if(Math.abs(v)>=1e9) return(v/1e9).toFixed(2)+' G';
+ if(Math.abs(v)>=1e6) return(v/1e6).toFixed(2)+' M';
+ if(Math.abs(v)>=1e3) return(v/1e3).toFixed(2)+' K';
+ if(Number.isInteger(v)) return v.toString();
+ return v.toFixed(2);
+}
+
+function formatBytes(b){
+ if(b>=1e12) return(b/1e12).toFixed(1)+' TB';
+ if(b>=1e9) return(b/1e9).toFixed(1)+' GB';
+ if(b>=1e6) return(b/1e6).toFixed(1)+' MB';
+ if(b>=1e3) return(b/1e3).toFixed(1)+' KB';
+ return b+' B';
+}
+
+function escapeHtml(s){
+ const d=document.createElement('div');
+ d.textContent=s;
+ return d.innerHTML;
+}
+
+searchInput.addEventListener('keydown',function(e){
+ if(e.key==='Enter'&&selectedMetric) addBtn.click();
+});
+
+// ==================== CPU Dashboard ====================
+let cpuCharts=[];
+let cpuSection=null;
+
+document.getElementById('cpuDashBtn').addEventListener('click',async function(){
+ if(cpuSection){
+  cpuCharts.forEach(function(c){c.destroy()});
+  cpuCharts=[];
+  cpuSection.remove();
+  cpuSection=null;
+  if(!charts.length&&!memSection&&!diskSection) document.getElementById('emptyState').style.display='';
+  return;
+ }
+ await showCPUDashboard();
+});
+
+async function showCPUDashboard(){
+ try{
+  const data=await fetchJSON('/api/cpu');
+  document.getElementById('emptyState').style.display='none';
+
+  // Filter by time window
+  const tw=getTimeWindow();
+  const filtered={cores:{},num_cores:data.num_cores};
+  for(const core in data.cores){
+   filtered.cores[core]=data.cores[core].filter(function(p){
+    if(tw.start>0&&p.ts_unix<tw.start) return false;
+    if(tw.end>0&&p.ts_unix>tw.end) return false;
+    return true;
+   });
+  }
+
+  if(cpuSection){
+   cpuCharts.forEach(function(c){c.destroy()});
+   cpuCharts=[];
+   cpuSection.remove();
+  }
+
+  cpuSection=document.createElement('div');
+  cpuSection.className='dash-section';
+
+  let html='<div class="section-header">'
+   +'<div><div class="section-title" style="color:#58a6ff">CPU Kullanimi (%) - rate() hesaplamasi</div>'
+   +'<div class="section-subtitle">'+filtered.num_cores+' cekirdek | 100 - (rate(idle) * 100)</div></div>'
+   +'<button class="remove-btn" title="Kapat">X</button></div>';
+
+  if(!filtered.cores||!filtered.cores.total||filtered.cores.total.length===0){
+   html+='<div class="dash-info">Secilen zaman araliginda yeterli veri yok.</div>';
+   cpuSection.innerHTML=html;
+   document.getElementById('chartsGrid').prepend(cpuSection);
+   cpuSection.querySelector('.remove-btn').addEventListener('click',function(){
+    cpuSection.remove();cpuSection=null;
+    if(!charts.length&&!memSection&&!diskSection) document.getElementById('emptyState').style.display='';
+   });
+   return;
+  }
+
+  html+='<div class="dash-grid" id="cpuGrid"></div>';
+  cpuSection.innerHTML=html;
+  document.getElementById('chartsGrid').prepend(cpuSection);
+
+  cpuSection.querySelector('.remove-btn').addEventListener('click',function(){
+   cpuCharts.forEach(function(c){c.destroy()});
+   cpuCharts=[];cpuSection.remove();cpuSection=null;
+   if(!charts.length&&!memSection&&!diskSection) document.getElementById('emptyState').style.display='';
+  });
+
+  const coreNames=Object.keys(filtered.cores).sort(function(a,b){
+   if(a==='total') return -1;
+   if(b==='total') return 1;
+   return (parseInt(a.replace('cpu',''),10)||0)-(parseInt(b.replace('cpu',''),10)||0);
+  });
+
+  const grid=document.getElementById('cpuGrid');
+
+  coreNames.forEach(function(core){
+   const points=filtered.cores[core];
+   if(!points||!points.length) return;
+   const lastVal=points[points.length-1].usage_pct;
+   const avgVal=points.reduce(function(s,p){return s+p.usage_pct},0)/points.length;
+
+   let valColor='#3fb950';
+   if(lastVal>80) valColor='#f85149';
+   else if(lastVal>50) valColor='#e3b341';
+
+   const cardId='cpu-card-'+core+'-'+Date.now();
+   const card=document.createElement('div');
+   card.className='dash-card';
+   card.innerHTML='<div class="card-name">'+(core==='total'?'TOPLAM (avg tum cekirdekler)':'Cekirdek '+core.replace('cpu',''))+'</div>'
+    +'<div class="card-value" style="color:'+valColor+'">%'+lastVal.toFixed(1)+'</div>'
+    +'<div style="font-size:11px;color:#8b949e;margin-bottom:8px">Ort: %'+avgVal.toFixed(1)+' | '+points.length+' nokta</div>'
+    +'<div class="mini-chart"><canvas id="'+cardId+'"></canvas></div>';
+   grid.appendChild(card);
+
+   const color=core==='total'?'#58a6ff':nextColor();
+   const ctx=document.getElementById(cardId).getContext('2d');
+   const chart=new Chart(ctx,{
+    type:'line',
+    data:{datasets:[{data:points.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.usage_pct}}),borderColor:color,backgroundColor:color+'22',borderWidth:1.5,pointRadius:2,fill:true,tension:0.3}]},
+    options:{
+     responsive:true,maintainAspectRatio:false,
+     interaction:{intersect:false,mode:'index'},
+     scales:{
+      x:{type:'time',display:true,grid:{display:false},ticks:{color:'#8b949e',font:{size:9},maxTicksLimit:6}},
+      y:{min:0,max:100,grid:{color:'#21262d'},ticks:{color:'#8b949e',font:{size:9},callback:function(v){return v+'%'}}}
+     },
+     plugins:{legend:{display:false},tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#c9d1d9',bodyColor:'#c9d1d9',callbacks:{label:function(ctx){return 'CPU: '+ctx.parsed.y.toFixed(1)+'%'}}}}
+    }
+   });
+   cpuCharts.push(chart);
+  });
+ }catch(e){console.error('CPU dashboard error:',e)}
+}
+
+// ==================== Memory Dashboard ====================
+let memCharts=[];
+let memSection=null;
+
+document.getElementById('memDashBtn').addEventListener('click',async function(){
+ if(memSection){
+  memCharts.forEach(function(c){c.destroy()});
+  memCharts=[];
+  memSection.remove();
+  memSection=null;
+  if(!charts.length&&!cpuSection) document.getElementById('emptyState').style.display='';
+  return;
+ }
+ await showMemDashboard();
+});
+
+async function showMemDashboard(){
+ try{
+  let data=await fetchJSON('/api/memory');
+  document.getElementById('emptyState').style.display='none';
+
+  // Filter by time window
+  const tw=getTimeWindow();
+  if(tw.start>0) data=data.filter(function(p){return p.ts_unix>=tw.start});
+  if(tw.end>0) data=data.filter(function(p){return p.ts_unix<=tw.end});
+
+  if(memSection){
+   memCharts.forEach(function(c){c.destroy()});
+   memCharts=[];
+   memSection.remove();
+  }
+
+  memSection=document.createElement('div');
+  memSection.className='dash-section';
+
+  const last=data.length>0?data[data.length-1]:null;
+  const totalStr=last?formatBytes(last.total_bytes):'-';
+
+  let html='<div class="section-header">'
+   +'<div><div class="section-title" style="color:#a371f7">Memory Kullanimi</div>'
+   +'<div class="section-subtitle">Toplam: '+totalStr+' | used = total - available</div></div>'
+   +'<button class="remove-btn" title="Kapat">X</button></div>';
+
+  if(!data.length){
+   html+='<div class="dash-info">Secilen zaman araliginda veri yok.</div>';
+   memSection.innerHTML=html;
+   const insertBefore=cpuSection?cpuSection.nextSibling:document.getElementById('chartsGrid').firstChild;
+   document.getElementById('chartsGrid').insertBefore(memSection,insertBefore);
+   memSection.querySelector('.remove-btn').addEventListener('click',function(){
+    memSection.remove();memSection=null;
+    if(!charts.length&&!cpuSection&&!diskSection) document.getElementById('emptyState').style.display='';
+   });
+   return;
+  }
+
+  html+='<div class="dash-grid" id="memGrid"></div>';
+  memSection.innerHTML=html;
+
+  const insertBefore=cpuSection?cpuSection.nextSibling:document.getElementById('chartsGrid').firstChild;
+  document.getElementById('chartsGrid').insertBefore(memSection,insertBefore);
+
+  memSection.querySelector('.remove-btn').addEventListener('click',function(){
+   memCharts.forEach(function(c){c.destroy()});
+   memCharts=[];memSection.remove();memSection=null;
+   if(!charts.length&&!cpuSection&&!diskSection) document.getElementById('emptyState').style.display='';
+  });
+
+  const grid=document.getElementById('memGrid');
+
+  // Card 1: RAM Usage %
+  var c1Id='mem-pct-'+Date.now();
+  var c1=document.createElement('div');c1.className='dash-card';
+  var lastPct=last?last.used_pct:0;
+  var avgPct=data.reduce(function(s,p){return s+p.used_pct},0)/data.length;
+  var pctColor=lastPct>80?'#f85149':lastPct>50?'#e3b341':'#3fb950';
+  c1.innerHTML='<div class="card-name">RAM Kullanimi</div>'
+   +'<div class="card-value" style="color:'+pctColor+'">%'+lastPct.toFixed(1)+'</div>'
+   +'<div style="font-size:11px;color:#8b949e;margin-bottom:8px">Ort: %'+avgPct.toFixed(1)+' | Kullanilan: '+formatBytes(last.used_bytes)+' / '+formatBytes(last.total_bytes)+'</div>'
+   +'<div class="mini-chart"><canvas id="'+c1Id+'"></canvas></div>';
+  grid.appendChild(c1);
+
+  var ch1=new Chart(document.getElementById(c1Id).getContext('2d'),{
+   type:'line',
+   data:{datasets:[{data:data.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.used_pct}}),borderColor:'#a371f7',backgroundColor:'#a371f722',borderWidth:1.5,pointRadius:2,fill:true,tension:0.3}]},
+   options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+    scales:{x:{type:'time',display:true,grid:{display:false},ticks:{color:'#8b949e',font:{size:9},maxTicksLimit:6}},y:{min:0,max:100,grid:{color:'#21262d'},ticks:{color:'#8b949e',font:{size:9},callback:function(v){return v+'%'}}}},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#c9d1d9',bodyColor:'#c9d1d9',callbacks:{label:function(ctx){return 'RAM: '+ctx.parsed.y.toFixed(1)+'%'}}}}}
+  });
+  memCharts.push(ch1);
+
+  // Card 2: RAM breakdown (stacked area)
+  var c2Id='mem-break-'+Date.now();
+  var c2=document.createElement('div');c2.className='dash-card';
+  c2.innerHTML='<div class="card-name">RAM Dagilimi (bytes)</div>'
+   +'<div class="mem-legend">'
+   +'<span class="mem-legend-item"><span class="dot" style="background:#f85149"></span>Used</span>'
+   +'<span class="mem-legend-item"><span class="dot" style="background:#3fb950"></span>Buffers</span>'
+   +'<span class="mem-legend-item"><span class="dot" style="background:#58a6ff"></span>Cached</span>'
+   +'<span class="mem-legend-item"><span class="dot" style="background:#8b949e"></span>Free</span>'
+   +'</div>'
+   +'<div class="mini-chart" style="height:160px"><canvas id="'+c2Id+'"></canvas></div>';
+  grid.appendChild(c2);
+
+  var ch2=new Chart(document.getElementById(c2Id).getContext('2d'),{
+   type:'line',
+   data:{datasets:[
+    {label:'Used',data:data.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.used_bytes-p.buffers_bytes-p.cached_bytes}}),borderColor:'#f85149',backgroundColor:'#f8514944',borderWidth:1,pointRadius:0,fill:true,tension:0.3},
+    {label:'Buffers',data:data.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.buffers_bytes}}),borderColor:'#3fb950',backgroundColor:'#3fb95044',borderWidth:1,pointRadius:0,fill:true,tension:0.3},
+    {label:'Cached',data:data.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.cached_bytes}}),borderColor:'#58a6ff',backgroundColor:'#58a6ff44',borderWidth:1,pointRadius:0,fill:true,tension:0.3},
+    {label:'Free',data:data.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.free_bytes}}),borderColor:'#8b949e',backgroundColor:'#8b949e44',borderWidth:1,pointRadius:0,fill:true,tension:0.3}
+   ]},
+   options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+    scales:{x:{type:'time',display:true,grid:{display:false},ticks:{color:'#8b949e',font:{size:9},maxTicksLimit:6}},y:{stacked:true,grid:{color:'#21262d'},ticks:{color:'#8b949e',font:{size:9},callback:function(v){return formatBytes(v)}}}},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#c9d1d9',bodyColor:'#c9d1d9',callbacks:{label:function(ctx){return ctx.dataset.label+': '+formatBytes(ctx.parsed.y)}}}}}
+  });
+  memCharts.push(ch2);
+
+  // Card 3: Swap
+  if(last&&last.swap_total>0){
+   var c3Id='mem-swap-'+Date.now();
+   var c3=document.createElement('div');c3.className='dash-card';
+   var swapPct=last.swap_used_pct;
+   var swapColor=swapPct>50?'#f85149':swapPct>10?'#e3b341':'#3fb950';
+   c3.innerHTML='<div class="card-name">Swap Kullanimi</div>'
+    +'<div class="card-value" style="color:'+swapColor+'">%'+swapPct.toFixed(1)+'</div>'
+    +'<div style="font-size:11px;color:#8b949e;margin-bottom:8px">Swap: '+formatBytes(last.swap_total-last.swap_free)+' / '+formatBytes(last.swap_total)+'</div>'
+    +'<div class="mini-chart"><canvas id="'+c3Id+'"></canvas></div>';
+   grid.appendChild(c3);
+
+   var ch3=new Chart(document.getElementById(c3Id).getContext('2d'),{
+    type:'line',
+    data:{datasets:[{data:data.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.swap_used_pct}}),borderColor:'#e3b341',backgroundColor:'#e3b34122',borderWidth:1.5,pointRadius:2,fill:true,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+     scales:{x:{type:'time',display:true,grid:{display:false},ticks:{color:'#8b949e',font:{size:9},maxTicksLimit:6}},y:{min:0,max:100,grid:{color:'#21262d'},ticks:{color:'#8b949e',font:{size:9},callback:function(v){return v+'%'}}}},
+     plugins:{legend:{display:false},tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#c9d1d9',bodyColor:'#c9d1d9',callbacks:{label:function(ctx){return 'Swap: '+ctx.parsed.y.toFixed(1)+'%'}}}}}
+   });
+   memCharts.push(ch3);
+  }
+
+  // Card 4: Available memory
+  var c4Id='mem-avail-'+Date.now();
+  var c4=document.createElement('div');c4.className='dash-card';
+  c4.innerHTML='<div class="card-name">Kullanilabilir (Available) Bellek</div>'
+   +'<div class="card-value" style="color:#58a6ff">'+formatBytes(last.avail_bytes)+'</div>'
+   +'<div style="font-size:11px;color:#8b949e;margin-bottom:8px">Toplam: '+formatBytes(last.total_bytes)+'</div>'
+   +'<div class="mini-chart"><canvas id="'+c4Id+'"></canvas></div>';
+  grid.appendChild(c4);
+
+  var ch4=new Chart(document.getElementById(c4Id).getContext('2d'),{
+   type:'line',
+   data:{datasets:[{data:data.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.avail_bytes}}),borderColor:'#58a6ff',backgroundColor:'#58a6ff22',borderWidth:1.5,pointRadius:2,fill:true,tension:0.3}]},
+   options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},
+    scales:{x:{type:'time',display:true,grid:{display:false},ticks:{color:'#8b949e',font:{size:9},maxTicksLimit:6}},y:{grid:{color:'#21262d'},ticks:{color:'#8b949e',font:{size:9},callback:function(v){return formatBytes(v)}}}},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#c9d1d9',bodyColor:'#c9d1d9',callbacks:{label:function(ctx){return 'Available: '+formatBytes(ctx.parsed.y)}}}}}
+  });
+  memCharts.push(ch4);
+
+ }catch(e){console.error('Memory dashboard error:',e)}
+}
+
+// ==================== Disk I/O Dashboard ====================
+let diskCharts=[];
+let diskSection=null;
+
+document.getElementById('diskDashBtn').addEventListener('click',async function(){
+ if(diskSection){
+  diskCharts.forEach(function(c){c.destroy()});
+  diskCharts=[];
+  diskSection.remove();
+  diskSection=null;
+  if(!charts.length&&!cpuSection&&!memSection) document.getElementById('emptyState').style.display='';
+  return;
+ }
+ await showDiskDashboard();
+});
+
+async function showDiskDashboard(){
+ try{
+  const data=await fetchJSON('/api/diskio');
+  document.getElementById('emptyState').style.display='none';
+
+  const tw=getTimeWindow();
+  const filtered={devices:{}};
+  for(const dev in data.devices){
+   filtered.devices[dev]=data.devices[dev].filter(function(p){
+    if(tw.start>0&&p.ts_unix<tw.start) return false;
+    if(tw.end>0&&p.ts_unix>tw.end) return false;
+    return true;
+   });
+  }
+
+  if(diskSection){
+   diskCharts.forEach(function(c){c.destroy()});
+   diskCharts=[];
+   diskSection.remove();
+  }
+
+  diskSection=document.createElement('div');
+  diskSection.className='dash-section';
+
+  const devNames=Object.keys(filtered.devices).sort();
+
+  let html='<div class="section-header">'
+   +'<div><div class="section-title" style="color:#d97706">Disk I/O - Okuma / Yazma Hizi</div>'
+   +'<div class="section-subtitle">'+devNames.length+' aygit | rate(read_bytes) + rate(written_bytes)</div></div>'
+   +'<button class="remove-btn" title="Kapat">X</button></div>';
+
+  const hasData=devNames.some(function(d){return filtered.devices[d].length>0});
+  if(!hasData){
+   html+='<div class="dash-info">Secilen zaman araliginda yeterli veri yok.</div>';
+   diskSection.innerHTML=html;
+   document.getElementById('chartsGrid').prepend(diskSection);
+   diskSection.querySelector('.remove-btn').addEventListener('click',function(){
+    diskSection.remove();diskSection=null;
+    if(!charts.length&&!cpuSection&&!memSection) document.getElementById('emptyState').style.display='';
+   });
+   return;
+  }
+
+  html+='<div class="dash-grid" id="diskGrid"></div>';
+  diskSection.innerHTML=html;
+  document.getElementById('chartsGrid').prepend(diskSection);
+
+  diskSection.querySelector('.remove-btn').addEventListener('click',function(){
+   diskCharts.forEach(function(c){c.destroy()});
+   diskCharts=[];diskSection.remove();diskSection=null;
+   if(!charts.length&&!cpuSection&&!memSection) document.getElementById('emptyState').style.display='';
+  });
+
+  const grid=document.getElementById('diskGrid');
+
+  devNames.forEach(function(dev){
+   const points=filtered.devices[dev];
+   if(!points||!points.length) return;
+
+   const lastR=points[points.length-1].read_bytes_per_sec;
+   const lastW=points[points.length-1].write_bytes_per_sec;
+   const avgR=points.reduce(function(s,p){return s+p.read_bytes_per_sec},0)/points.length;
+   const avgW=points.reduce(function(s,p){return s+p.write_bytes_per_sec},0)/points.length;
+
+   const cardId='disk-card-'+dev+'-'+Date.now();
+   const card=document.createElement('div');
+   card.className='dash-card';
+   card.innerHTML='<div class="card-name">'+dev+'</div>'
+    +'<div style="display:flex;gap:16px;margin-bottom:4px">'
+    +'<div><span style="color:#58a6ff;font-size:13px;font-weight:600">R: '+formatBytes(lastR)+'/s</span></div>'
+    +'<div><span style="color:#f78166;font-size:13px;font-weight:600">W: '+formatBytes(lastW)+'/s</span></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#8b949e;margin-bottom:8px">Ort R: '+formatBytes(avgR)+'/s | Ort W: '+formatBytes(avgW)+'/s | '+points.length+' nokta</div>'
+    +'<div class="mini-chart" style="height:140px"><canvas id="'+cardId+'"></canvas></div>';
+   grid.appendChild(card);
+
+   const ctx=document.getElementById(cardId).getContext('2d');
+   const chart=new Chart(ctx,{
+    type:'line',
+    data:{datasets:[
+     {label:'Okuma',data:points.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.read_bytes_per_sec}}),borderColor:'#58a6ff',backgroundColor:'#58a6ff22',borderWidth:1.5,pointRadius:0,fill:true,tension:0.3},
+     {label:'Yazma',data:points.map(function(p){return{x:new Date(p.ts_unix*1000),y:p.write_bytes_per_sec}}),borderColor:'#f78166',backgroundColor:'#f7816622',borderWidth:1.5,pointRadius:0,fill:true,tension:0.3}
+    ]},
+    options:{
+     responsive:true,maintainAspectRatio:false,
+     interaction:{intersect:false,mode:'index'},
+     scales:{
+      x:{type:'time',display:true,grid:{display:false},ticks:{color:'#8b949e',font:{size:9},maxTicksLimit:6}},
+      y:{min:0,grid:{color:'#21262d'},ticks:{color:'#8b949e',font:{size:9},callback:function(v){return formatBytes(v)+'/s'}}}
+     },
+     plugins:{legend:{display:false},tooltip:{backgroundColor:'#161b22',borderColor:'#30363d',borderWidth:1,titleColor:'#c9d1d9',bodyColor:'#c9d1d9',callbacks:{label:function(ctx){return ctx.dataset.label+': '+formatBytes(ctx.parsed.y)+'/s'}}}}
+    }
+   });
+   diskCharts.push(chart);
+  });
+ }catch(e){console.error('Disk dashboard error:',e)}
+}
+
+init();
+</script>
+</body>
+</html>
